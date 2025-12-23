@@ -1,0 +1,1265 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Luna – AI vendégasszisztens · Next‑Gen</title>
+
+  <!-- Futurisztikus fontok -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #020617;
+      --bg-alt: #020617;
+      --surface: rgba(15, 23, 42, 0.85);
+      --surface-soft: rgba(15, 23, 42, 0.65);
+      --border: rgba(148, 163, 184, 0.35);
+      --accent: #38bdf8;          /* neon kék */
+      --accent-soft: rgba(56, 189, 248, 0.18);
+      --accent-2: #a855f7;        /* neon lila */
+      --accent-2-soft: rgba(168, 85, 247, 0.18);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --danger: #f97373;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --shadow-soft: 0 24px 80px rgba(15, 23, 42, 0.75);
+      --shadow-subtle: 0 18px 40px rgba(15, 23, 42, 0.6);
+      --blur: 22px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.22), transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.24), transparent 55%),
+        radial-gradient(circle at 0% 100%, rgba(248, 250, 252, 0.04), transparent 55%),
+        var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-shell {
+      position: relative;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Dekoratív rács / glow */
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.18;
+      mix-blend-mode: screen;
+      background-image:
+        linear-gradient(to right, rgba(148, 163, 184, 0.25) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148, 163, 184, 0.25) 1px, transparent 1px);
+      background-size: 80px 80px;
+      z-index: 0;
+    }
+
+    .gradient-orbit {
+      position: fixed;
+      width: 620px;
+      height: 620px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 210deg,
+          rgba(56, 189, 248, 0.0),
+          rgba(56, 189, 248, 0.7),
+          rgba(168, 85, 247, 0.75),
+          rgba(56, 189, 248, 0.0)
+        );
+      filter: blur(40px);
+      opacity: 0.38;
+      top: -220px;
+      right: -120px;
+      pointer-events: none;
+      z-index: 0;
+      animation: orbit 26s linear infinite;
+    }
+
+    @keyframes orbit {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 20px 40px;
+    }
+
+    /* HEADER */
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.32), transparent 65%),
+                  radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.28), transparent 55%),
+                  rgba(15, 23, 42, 0.86);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(26px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-orb {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 30% 0, #e0f2fe, transparent 60%),
+        linear-gradient(135deg, #38bdf8, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0b1120;
+      font-weight: 800;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      letter-spacing: 0.05em;
+      font-size: 17px;
+      box-shadow:
+        0 0 30px rgba(56, 189, 248, 0.8),
+        0 0 60px rgba(168, 85, 247, 0.7);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo-orb::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, rgba(255,255,255,0.28), transparent 65%);
+      mix-blend-mode: screen;
+    }
+
+    .brand-text-main {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      font-size: 13px;
+      text-transform: uppercase;
+      color: #e5e7eb;
+    }
+
+    .brand-text-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 18px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      transition: all 0.18s ease-out;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    nav a span.dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.8);
+    }
+
+    nav a:hover {
+      color: var(--text);
+      border-color: rgba(148, 163, 184, 0.5);
+      background: radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.18), transparent 55%);
+    }
+
+    /* HERO */
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1.1fr);
+      gap: 26px;
+      margin-top: 18px;
+      align-items: stretch;
+    }
+
+    .hero-main {
+      position: relative;
+      padding: 24px 24px 22px;
+      border-radius: var(--radius-lg);
+      background:
+        radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.16), transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.18), transparent 60%),
+        var(--surface);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(var(--blur));
+      overflow: hidden;
+    }
+
+    .hero-main::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      border: 1px solid transparent;
+      background:
+        linear-gradient(135deg, rgba(56, 189, 248, 0.45), rgba(168, 85, 247, 0.45))
+        border-box;
+      mask:
+        linear-gradient(#000 0 0) padding-box,
+        linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .hero-kicker-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 0, #e0f2fe, transparent 60%),
+                  linear-gradient(135deg, #38bdf8, #22c55e);
+      font-size: 11px;
+      color: #020617;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.9);
+    }
+
+    .hero-title {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 30px;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 10px;
+    }
+
+    .hero-gradient {
+      background: linear-gradient(120deg, #e5e7eb, #bae6fd, #e9d5ff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-text {
+      font-size: 14px;
+      color: var(--muted);
+      max-width: 520px;
+    }
+
+    .hero-text strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .hero-cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .btn-primary {
+      position: relative;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 9px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #0b1120;
+      background:
+        radial-gradient(circle at 0 0, #e0f2fe, transparent 55%),
+        linear-gradient(135deg, #38bdf8, #22c55e);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow:
+        0 0 24px rgba(34, 197, 94, 0.65),
+        0 12px 32px rgba(15, 23, 42, 0.95);
+      white-space: nowrap;
+    }
+
+    .btn-primary span.icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #bbf7d0;
+      font-size: 11px;
+    }
+
+    .btn-secondary {
+      border-radius: 999px;
+      padding: 8px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      backdrop-filter: blur(18px);
+      transition: all 0.18s ease-out;
+    }
+
+    .btn-secondary:hover {
+      color: var(--text);
+      border-color: rgba(148, 163, 184, 0.9);
+      background: radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.16), transparent 60%);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pill {
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 0, #e0f2fe, transparent 60%),
+                  linear-gradient(135deg, #38bdf8, #a855f7);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
+    }
+
+    .hero-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .hero-metric {
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .hero-metric strong {
+      font-size: 13px;
+      color: #e5e7eb;
+    }
+
+    /* HERO SIDE – “Live chat preview / how it works” */
+
+    .hero-side {
+      position: relative;
+      padding: 18px 18px 16px;
+      border-radius: var(--radius-lg);
+      background:
+        radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.28), transparent 60%),
+        var(--surface-soft);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      backdrop-filter: blur(var(--blur));
+      box-shadow: var(--shadow-subtle);
+      overflow: hidden;
+    }
+
+    .hero-side-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+
+    .hero-side-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .hero-side-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .hero-bullets {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: 16px;
+      margin-bottom: 12px;
+    }
+
+    .hero-bullets li {
+      margin-bottom: 4px;
+    }
+
+    .chat-shell {
+      margin-top: 10px;
+      border-radius: 16px;
+      padding: 10px 10px 9px;
+      background: radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.25), transparent 60%),
+                  rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(148, 163, 184, 0.65);
+      font-size: 11px;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .chat-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .chat-avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 30% 0, #e0f2fe, transparent 60%),
+        linear-gradient(135deg, #38bdf8, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #020617;
+      font-weight: 700;
+      font-size: 10px;
+    }
+
+    .chat-status {
+      font-size: 10px;
+      color: #22c55e;
+    }
+
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .bubble {
+      max-width: 100%;
+      padding: 6px 8px;
+      border-radius: 10px;
+      line-height: 1.35;
+    }
+
+    .bubble-user {
+      align-self: flex-end;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      color: var(--text);
+    }
+
+    .bubble-bot {
+      align-self: flex-start;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(56, 189, 248, 0.7);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.4);
+      color: var(--text);
+    }
+
+    .chat-input {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(148, 163, 184, 0.3);
+      margin-top: 4px;
+    }
+
+    .chat-input-box {
+      flex: 1;
+      padding: 6px 8px;
+      border-radius: 999px;
+      border: 1px dashed rgba(148, 163, 184, 0.7);
+      color: var(--muted);
+    }
+
+    .chat-send {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+      background:
+        linear-gradient(135deg, #38bdf8, #a855f7);
+      color: #020617;
+      font-size: 11px;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.9);
+    }
+
+    .hero-side-note {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    /* GENERIC SECTION STYLES */
+
+    .section {
+      margin-top: 34px;
+    }
+
+    .section-header {
+      margin-bottom: 10px;
+    }
+
+    .section-kicker {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      letter-spacing: -0.03em;
+    }
+
+    .section-title span {
+      background: linear-gradient(120deg, #e5e7eb, #bae6fd, #e9d5ff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .section-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+      max-width: 520px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .card {
+      position: relative;
+      padding: 14px 14px 12px;
+      border-radius: var(--radius-md);
+      background:
+        radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.16), transparent 60%),
+        rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.9);
+      font-size: 13px;
+    }
+
+    .card-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .card-tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #38bdf8, #a855f7);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.85);
+    }
+
+    .card h3 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .card p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .card ul {
+      margin-top: 8px;
+      padding-left: 18px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .card li {
+      margin-bottom: 4px;
+    }
+
+    .columns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .column {
+      flex: 1;
+      min-width: 260px;
+    }
+
+    /* PRICING HIGHLIGHTS */
+
+    .pricing-card {
+      border-image: linear-gradient(135deg, rgba(56, 189, 248, 0.6), rgba(168, 85, 247, 0.7)) 1;
+      border-width: 1px;
+      border-style: solid;
+    }
+
+    .pricing-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    /* CONTACT */
+
+    .contact-shell {
+      margin-top: 16px;
+    }
+
+    .contact-card {
+      padding: 16px 16px 14px;
+      border-radius: var(--radius-md);
+      background:
+        radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.18), transparent 60%),
+        rgba(15, 23, 42, 0.94);
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.95);
+      font-size: 13px;
+    }
+
+    .contact-card h3 {
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .contact-card p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.94);
+      color: var(--text);
+      font-size: 13px;
+      margin-bottom: 10px;
+      outline: none;
+      transition: border-color 0.16s ease-out, box-shadow 0.16s ease-out;
+    }
+
+    textarea {
+      border-radius: 16px;
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: rgba(56, 189, 248, 0.9);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.8);
+    }
+
+    button[type="submit"] {
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 9px 15px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #0b1120;
+      background:
+        radial-gradient(circle at 0 0, #e0f2fe, transparent 55%),
+        linear-gradient(135deg, #38bdf8, #a855f7);
+      box-shadow: 0 0 24px rgba(168, 85, 247, 0.7);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button[type="submit"]:disabled {
+      opacity: 0.7;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    #contactMsg {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* FOOTER */
+
+    footer {
+      margin-top: 32px;
+      padding: 14px 0 4px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    footer span.highlight {
+      color: #e5e7eb;
+    }
+
+    /* RESPONSIVE */
+
+    @media (max-width: 960px) {
+      .hero {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .hero-side {
+        order: -1;
+      }
+
+      header {
+        border-radius: 16px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      nav ul {
+        display: none;
+      }
+
+      .container {
+        padding-inline: 16px;
+      }
+
+      .cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 520px) {
+      .cards-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .hero-main,
+      .hero-side,
+      .contact-card,
+      .card {
+        border-radius: 14px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page-shell">
+    <div class="grid-overlay"></div>
+    <div class="gradient-orbit"></div>
+
+    <div class="container">
+      <!-- HEADER -->
+      <header>
+        <div class="brand">
+          <div class="logo-orb">LU</div>
+          <div>
+            <div class="brand-text-main">Luna Chatbot</div>
+            <div class="brand-text-sub">AI vendégasszisztens éttermeknek · 0–24</div>
+          </div>
+        </div>
+
+        <nav>
+          <ul>
+            <li><a href="#features"><span class="dot"></span>Mit tud?</a></li>
+            <li><a href="#usecases"><span class="dot"></span>Felhasználási módok</a></li>
+            <li><a href="#pricing"><span class="dot"></span>Árazás</a></li>
+            <li><a href="#contact"><span class="dot"></span>Kapcsolat</a></li>
+          </ul>
+        </nav>
+      </header>
+
+      <!-- HERO -->
+      <section class="hero">
+        <div class="hero-main">
+          <div class="hero-kicker">
+            <span class="hero-kicker-badge">◎</span>
+            Kevesebb telefon, több foglalás – automatán
+          </div>
+
+          <h1 class="hero-title">
+            Chatbot, ami <span class="hero-gradient">válaszol a vendégeidnek</span> – helyetted.
+          </h1>
+
+          <p class="hero-text">
+            A Luna az éttermed <strong>menüjét, nyitvatartását és foglalási szabályait</strong> használja,
+            hogy 0–24-ben, magyarul és angolul reagáljon a vendégek kérdéseire – közvetlenül a weboldaladon.
+          </p>
+
+          <div class="hero-cta-row">
+            <a href="#contact" class="btn-primary">
+              <span class="icon">▶</span>
+              Demó / ajánlatkérés éttermeknek
+            </a>
+            <a href="#features" class="btn-secondary">
+              <span>Mit tud pontosan a chatbot?</span>
+            </a>
+          </div>
+
+          <div class="pill-row">
+            <span class="pill">
+              <span class="pill-dot"></span>
+              Menü &amp; allergén magyarázat
+            </span>
+            <span class="pill">
+              <span class="pill-dot"></span>
+              Asztalfoglalás előszűrése
+            </span>
+            <span class="pill">
+              <span class="pill-dot"></span>
+              Magyar &amp; angol nyelv
+            </span>
+          </div>
+
+          <div class="hero-metrics">
+            <div class="hero-metric">
+              <strong>60–70%</strong>
+              <span>kevesebb ismétlődő kérdés telefonon / üzenetben</span>
+            </div>
+            <div class="hero-metric">
+              <strong>1 sor kód</strong>
+              <span>a weboldalba – és már él is a chatbot</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- HERO SIDE: működés + mini chat preview -->
+        <aside class="hero-side">
+          <div class="hero-side-label">Realtime vendégasszisztens</div>
+          <h3 class="hero-side-title">Hogyan működik a Luna a weboldaladon?</h3>
+          <p class="hero-side-sub">
+            A jobb alsó sarokban megjelenő chatbot-buborékra kattintva a vendég azonnal kérdezhet, te pedig
+            a háttérben látod, mire kíváncsiak leginkább.
+          </p>
+
+          <ul class="hero-bullets">
+            <li>Rákérdezhet az ételek összetevőire és allergénekre</li>
+            <li>Megkérdezheti, van-e szabad asztal adott időpontra</li>
+            <li>Információt kaphat nyitvatartásról, parkolásról, fizetési módokról</li>
+            <li>Ajánlott bor- és ételpárosításokat kérhet</li>
+          </ul>
+
+          <div class="chat-shell">
+            <div class="chat-header">
+              <div class="chat-title">
+                <div class="chat-avatar">LU</div>
+                <div>
+                  <div>Luna · Éttermi AI</div>
+                  <div class="chat-status">Online · &lt;10 mp válaszidő</div>
+                </div>
+              </div>
+              <div style="font-size:10px;color:var(--muted);">
+                Demo mód
+              </div>
+            </div>
+
+            <div class="chat-messages">
+              <div class="bubble bubble-user">
+                „Gluténérzékeny vagyok. Mit ajánlasz ma estére két főre?”
+              </div>
+              <div class="bubble bubble-bot">
+                „Örülök, hogy írtál! Több gluténmentes főételünk is van – például a grillezett lazac
+                citromos zöldségekkel, vagy a csicseriborsó-ragu. Ha szeretnéd, szívesen ajánlok bort is.”
+              </div>
+            </div>
+
+            <div class="chat-input">
+              <div class="chat-input-box">
+                Írd meg a kérdésed… (a valódi chatbot a jobb alsó sarokban jelenik meg)
+              </div>
+              <div class="chat-send">↗</div>
+            </div>
+          </div>
+
+          <p class="hero-side-note">
+            Minden kérdést naplózunk, így pontos statisztikát kapsz arról, milyen témák érdeklik a vendégeidet a
+            leginkább.
+          </p>
+        </aside>
+      </section>
+
+      <!-- FEATURES -->
+      <section id="features" class="section">
+        <div class="section-header">
+          <div class="section-kicker">Fő funkciók</div>
+          <h2 class="section-title">Mit tud a <span>Luna Chatbot?</span></h2>
+          <p class="section-sub">
+            Éttermi folyamatokra hangolt AI, ami természetes nyelven válaszol – vendégeknek és akár belső használatra is.
+          </p>
+        </div>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-tag">
+              <span class="card-tag-dot"></span>
+              Vendégkommunikáció
+            </div>
+            <h3>Étlap &amp; allergén asszisztens</h3>
+            <p>
+              A vendégek természetes nyelven kérdezhetnek az ételekről, italokról, allergénekről és
+              vegán/vegetáriánus opciókról.
+            </p>
+            <ul>
+              <li>Összetevők és allergének részletes listázása</li>
+              <li>Ajánlott alternatívák ételintolerancia esetén</li>
+              <li>Fordítás magyar–angol között</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-tag">
+              <span class="card-tag-dot"></span>
+              Foglalás támogatás
+            </div>
+            <h3>Asztalfoglalás előszűrése</h3>
+            <p>
+              A chatbot összegyűjti a foglaláshoz szükséges adatokat, mielőtt a személyzethez kerülne.
+            </p>
+            <ul>
+              <li>Dátum, időpont, létszám bekérése</li>
+              <li>Megjegyzés: születésnap, gyerek, kutya, allergia</li>
+              <li>Foglalási igény továbbítása e-mailben vagy rendszerbe</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-tag">
+              <span class="card-tag-dot"></span>
+              Automatizálás
+            </div>
+            <h3>Gyakori kérdések kiváltása</h3>
+            <p>
+              A fix, ismétlődő kérdésekre (nyitvatartás, cím, parkolás stb.) a rendszer azonnal válaszol.
+            </p>
+            <ul>
+              <li>Nyitvatartás, cím, parkolás, fizetési módok</li>
+              <li>Kuponok, akciók, napi menü, események</li>
+              <li>Csoportos foglalások alapinformációi</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- USE CASES -->
+      <section id="usecases" class="section">
+        <div class="section-header">
+          <div class="section-kicker">Hol segít a legtöbbet?</div>
+          <h2 class="section-title">Felhasználási módok <span>éttermeknek</span></h2>
+          <p class="section-sub">
+            A Luna egyszerre lehet vendég-facing chatbot a weboldaladon és gyors tudásbázis a személyzet számára.
+          </p>
+        </div>
+
+        <div class="columns">
+          <div class="column">
+            <div class="card">
+              <div class="card-tag">
+                <span class="card-tag-dot"></span>
+                Weboldal / vendégek
+              </div>
+              <h3>1. Beágyazott chatbot a weboldalon</h3>
+              <p>
+                A vendégek már a honlapon megkapják a válaszokat, ahelyett hogy telefonálnának vagy Facebookon
+                írnának.
+              </p>
+              <ul>
+                <li>Egyszerű JavaScript-kóddal beilleszthető widget</li>
+                <li>Reszponzív, mobilbarát, sötét/világos módra optimalizálva</li>
+                <li>Testreszabható színek és márkaelemek</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="column">
+            <div class="card">
+              <div class="card-tag">
+                <span class="card-tag-dot"></span>
+                Belső használat
+              </div>
+              <h3>2. Gyors segéd a személyzetnek</h3>
+              <p>
+                A pult mögött vagy személyzeti tableten futó verzió segít gyorsan megtalálni az
+                étlap-információkat.
+              </p>
+              <ul>
+                <li>Villámgyors allergén-keresés rendelés közben</li>
+                <li>Étel-összetevők ellenőrzése új kollégáknak</li>
+                <li>Betanítás támogatása: minden tudás egy helyen</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section id="pricing" class="section">
+        <div class="section-header">
+          <div class="section-kicker">Egyszerű, átlátható konstrukciók</div>
+          <h2 class="section-title">Árazás <span>kis- és közepes éttermeknek</span></h2>
+          <p class="section-sub">
+            Kisebb bisztróktól a több egységes étteremláncokig – a csomagokat az igényeidhez igazítjuk.
+          </p>
+        </div>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-tag">
+              <span class="card-tag-dot"></span>
+              Belépő csomag
+            </div>
+            <h3>Alap chatbot</h3>
+            <p>
+              Ideális kisebb éttermeknek, akik szeretnék tehermentesíteni a telefont és a közösségi médiát.
+            </p>
+            <ul>
+              <li>Étlap + alap GYIK betöltése</li>
+              <li>Weboldalra beágyazható widget</li>
+              <li>E-mail értesítés a foglalási igényekről</li>
+            </ul>
+          </div>
+
+          <div class="card pricing-card">
+            <div class="card-tag">
+              <span class="card-tag-dot"></span>
+              Növekvő éttermek
+            </div>
+            <h3>Pro csomag</h3>
+            <p>
+              Többnyelvű támogatás, fejlettebb integrációk és részletes riportok a vendégkérdésekről.
+            </p>
+            <ul>
+              <li>Magyar + angol nyelv</li>
+              <li>Alap integráció foglalási rendszerrel</li>
+              <li>Havi statisztika a chatbot interakciókról</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="card-tag">
+              <span class="card-tag-dot"></span>
+              Egyedi megoldások
+            </div>
+            <h3>Egyedi fejlesztés</h3>
+            <p>
+              Ha speciális rendszerhez, saját CRM-hez vagy étteremlánc-struktúrához kell illeszkedni.
+            </p>
+            <ul>
+              <li>Egyedi funkciók és integrációk</li>
+              <li>Márkára szabott hang, stílus, vizuál</li>
+              <li>Fejlesztés és támogatás megállapodás szerint</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTACT -->
+      <section id="contact" class="section">
+        <div class="section-header">
+          <div class="section-kicker">Kapcsolatfelvétel</div>
+          <h2 class="section-title">Kérj <span>demót vagy ajánlatot</span></h2>
+          <p class="section-sub">
+            Írd meg az éttermed adatait, és rövid online bemutató keretében megmutatjuk, hogyan működne nálatok a Luna.
+          </p>
+        </div>
+
+        <div class="columns contact-shell">
+          <div class="column">
+            <div class="contact-card">
+              <h3>Írd meg az éttermed adatait</h3>
+              <p>
+                Töltsd ki az űrlapot, és felvesszük veled a kapcsolatot időpont egyeztetéséhez.
+              </p>
+
+              <form id="contactForm" onsubmit="return handleContact(event)">
+                <label for="ownerName">Név</label>
+                <input id="ownerName" required placeholder="Pl. Kovács Anna">
+
+                <label for="restaurantName">Étterem neve</label>
+                <input id="restaurantName" required placeholder="Pl. La Terrazza Budapest">
+
+                <label for="email">E-mail</label>
+                <input id="email" type="email" required placeholder="pl. anna@example.com">
+
+                <label for="message">Üzenet / igények</label>
+                <textarea id="message" rows="3" placeholder="Pl. többnyelvű chatbot, foglalási integráció, speciális kérések…"></textarea>
+
+                <button type="submit">
+                  Ajánlatkérés elküldése
+                </button>
+              </form>
+
+              <p id="contactMsg"></p>
+            </div>
+          </div>
+
+          <div class="column">
+            <div class="contact-card">
+              <h3>Technikai információk</h3>
+              <p>
+                A chatbot egyetlen JavaScript-sorral illeszthető be a meglévő weboldaladba, külön fejlesztés nélkül.
+              </p>
+              <p>
+                Támogatott: modern böngészők, mobil és desktop eszközök, reszponzív megjelenés.
+              </p>
+              <p>
+                Az AI motor GPT-alapú; a vendégadatok kezelését adatvédelmi szempontból átláthatóan dokumentáljuk.
+              </p>
+              <p>
+                A jobb alsó sarokban megjelenő chatbot-ikon jelenleg demonstrációs módban fut, hogy kipróbálhasd a
+                működését éles használat előtt.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        © <span id="year"></span> <span class="highlight">Luna Chatbot</span> — AI vendégasszisztens éttermeknek
+      </footer>
+    </div>
+  </div>
+
+  <!-- Chatbot integráció – a funkciók változatlanok maradnak -->
+  <script>
+    // Ne írj ide valódi secret kulcsot – azt mindig szerveren tárold!
+    window.RESTAURANT_CHATBOT_KEY = "PASTE_YOUR_PUBLIC_OR_PROXY_KEY_HERE";
+  </script>
+  <script src="chatbot.js" defer></script>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    function handleContact(e) {
+      e.preventDefault();
+      const name = document.getElementById('ownerName').value.trim();
+      const restaurant = document.getElementById('restaurantName').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      if (!name || !restaurant || !email) {
+        showContactMsg('Kérlek töltsd ki a kötelező mezőket.');
+        return false;
+      }
+
+      // Itt a valódi alkalmazásban AJAX kérés menne a szerverre.
+      showContactMsg(`Köszönjük, ${name}! Hamarosan felvesszük veled a kapcsolatot a(z) ${restaurant} részére küldött ajánlatkérés miatt.`);
+      document.getElementById('contactForm').reset();
+      return false;
+    }
+
+    function showContactMsg(t) {
+      const el = document.getElementById('contactMsg');
+      el.textContent = t;
+    }
+  </script>
+</body>
+</html>
