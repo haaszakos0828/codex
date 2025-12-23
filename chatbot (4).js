@@ -21,10 +21,10 @@
   const TEXT = Object.freeze({
     title: "Luna",
     online: "Online",
-    placeholderDisabled: "Előbb válassz egy témát 👇",
+    placeholderDisabled: "Írd be a kérdésed…",
     send: "Küldés",
     launcher: "AI",
-    greet: "Miben segíthetek? Válassz egy témát:",
+    greet: "Szia! Miben segíthetek az étteremmel kapcsolatban?",
     askAfterPick: "Pontosan mivel kapcsolatban tudok segíteni?",
     offTopic: "Ezzel kapcsolatban itt nem tudok segíteni. Kérdezz bátran az éttermünkről!",
     networkError: "Hálózati hiba történt. Próbáld újra később.",
@@ -38,32 +38,7 @@
       `Túl sok kérdés érkezett rövid idő alatt. A chat ${sec} mp-re ideiglenesen le lett tiltva.`
   });
 
-  const OFFTOPIC = ["politika","programoz","jog","ingatlan","tőzsde","kripto","sport","film","telefon ár","önéletrajz"];
-  const FOOD = ["étel","ital","menü","étlap","fogl","asztal","bor","kávé","desszert","glutén","vega","foglalás","nyitvatartás","allergén","wifi","szervízdíj","ár"];
-
-  const CATEGORY_HINTS = Object.freeze({
-    drinks: [
-      "ital","inni","koktél","tonik","vodka","gin","rum","tequila","whiskey","viszki",
-      "bor","pezsgő","sör","kávé","tea","üdítő","limonádé","ayran","szóda"
-    ],
-    desserts: ["desszert","deszert","baklava","künefe","sutlac","fagylalt","torta","csoki","puding","gyümölcs"],
-    starters_soups: ["előétel","meze","leves","çorba","corba","humusz","humus","cacik","sarma","lahmacun"],
-    mains: ["főétel","kebab","şiş","sis","adana","köfte","kofte","bárány","borjú","csirke","hal","lazac","tengeri","saláta","köret","pilav","pide"],
-    info: ["foglal","asztal","nyitvatart","cím","helyszín","telefon","email","fizetés","bankkártya","szervízdíj","service"]
-  });
-
-  function detectLikelyCategory(text){
-    const q = (text||"").toLowerCase();
-    let best = null;
-    let bestScore = 0;
-
-    for (const [cat, words] of Object.entries(CATEGORY_HINTS)) {
-      let score = 0;
-      for (const w of words) if (q.includes(w)) score++;
-      if (score > bestScore) { bestScore = score; best = cat; }
-    }
-    return bestScore >= 2 ? best : null;
-  }
+  const DEFAULT_CATEGORY = "auto";
 
   const timeFormatter = new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" });
 
@@ -118,9 +93,8 @@
     safeWrite(CONFIG.spamStateKey, JSON.stringify(st));
   }
 
-  function isOffTopic(text){
-    const q = (text||'').toLowerCase();
-    return OFFTOPIC.some(k => q.includes(k)) && !FOOD.some(k => q.includes(k));
+  function isOffTopic(){
+    return false;
   }
 
   class RestaurantChatbot {
@@ -134,7 +108,7 @@
       this.isSending = false;
       this.abortController = null;
 
-      this.selectedCategory = safeRead(CONFIG.categoryKey) || null;
+      this.selectedCategory = DEFAULT_CATEGORY;
       this.categoryRowEl = null;
 
       this.topicMenuOpen = false;
@@ -145,15 +119,10 @@
       this.renderHistory();
       this.bindEvents();
 
-      if (!this.selectedCategory) this.startCategoryGate();
-      else this.setInputEnabled(true);
+      this.setInputEnabled(true);
 
       if(!this.history.length){
         this.addBot(TEXT.greet, {persist:false});
-        this.showCategoryOptions();
-      } else if (!this.selectedCategory) {
-        this.addBot(TEXT.greet, {persist:false});
-        this.showCategoryOptions();
       }
 
       this.renderTopicMenu(); // dropdown menü feltöltése
@@ -738,7 +707,7 @@
       this.nodes.input.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          if (this.isSending || !this.selectedCategory) return;
+          if (this.isSending) return;
           if (this.applySpamBlockIfNeeded(false)) return;
 
           this.isSending = true;
@@ -746,14 +715,14 @@
           try { await this.handleSend(); }
           finally {
             this.isSending = false;
-            this.setInputEnabled(!!this.selectedCategory);
+            this.setInputEnabled(true);
             this.nodes.input.focus();
           }
         }
       });
 
       this.nodes.send.addEventListener('click', async () => {
-        if (this.isSending || !this.selectedCategory) return;
+        if (this.isSending) return;
         if (this.applySpamBlockIfNeeded(false)) return;
 
         this.isSending = true;
@@ -761,7 +730,7 @@
         try { await this.handleSend(); }
         finally {
           this.isSending = false;
-          this.setInputEnabled(!!this.selectedCategory);
+          this.setInputEnabled(true);
           this.nodes.input.focus();
         }
       });
@@ -773,7 +742,7 @@
         this.nodes.launcher.classList.remove("isVisible");
         this.nodes.panel.classList.remove("isHidden");
         setTimeout(() => {
-          if (this.selectedCategory) this.nodes.input.focus();
+      this.nodes.input.focus();
           this.scrollToEnd();
         }, 10);
       } else {
@@ -802,11 +771,7 @@
     }
 
     updateTopicUi(){
-      const has = !!this.selectedCategory;
-      const label = has ? this.getCategoryLabel(this.selectedCategory) : null;
-
-      this.nodes.topicBar.style.display = has ? 'flex' : 'none';
-      if (has && label) this.nodes.topicText.textContent = `Aktuális téma: ${label}`;
+      this.nodes.topicBar.style.display = 'none';
 
       // 🔒 lock UI, ha válaszol
       const locked = !!this.isSending;
@@ -826,14 +791,13 @@
       this.nodes.send.disabled = !finalEnabled;
 
       if (finalEnabled) {
-        const label = this.getCategoryLabel(this.selectedCategory);
-        this.nodes.input.placeholder = label ? `Kérdezz az aktuális témában…` : "Írd be a kérdésed…";
+        this.nodes.input.placeholder = "Írd be a kérdésed…";
       } else {
         if (blocked) {
           const leftSec = msToSecCeil(st.blockedUntil - nowMs());
           this.nodes.input.placeholder = TEXT.spamBlocked(leftSec);
         } else {
-          this.nodes.input.placeholder = this.selectedCategory ? "Írd be a kérdésed…" : TEXT.placeholderDisabled;
+          this.nodes.input.placeholder = TEXT.placeholderDisabled;
         }
       }
 
@@ -841,7 +805,7 @@
     }
 
     startCategoryGate(){
-      this.selectedCategory = null;
+      this.selectedCategory = DEFAULT_CATEGORY;
       safeRemove(CONFIG.categoryKey);
       this.setInputEnabled(false);
       this.updateTopicUi();
@@ -942,50 +906,18 @@
 
     // ===== Topic dropdown =====
     renderTopicMenu(){
-      // csak akkor legyen értelme, ha van topic
-      if (!this.selectedCategory) {
-        this.nodes.topicMenu.hidden = true;
-        this.topicMenuOpen = false;
-        this.nodes.topicSelect.setAttribute("aria-expanded", "false");
-        return;
-      }
-
-      const items = CATEGORIES.map((c) => {
-        const active = c.key === this.selectedCategory ? "isActive" : "";
-        return `
-          <button class="menuItem ${active}" type="button" data-key="${c.key}">
-            <span class="t">${c.label}</span>
-            <span class="s">${c.sub || ""}</span>
-          </button>
-        `;
-      }).join("");
-
-      this.nodes.topicMenu.innerHTML = `
-        <div class="menuHeader">Téma váltása</div>
-        ${items}
-      `;
-
-      // rebind click
-      Array.from(this.nodes.topicMenu.querySelectorAll(".menuItem")).forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const key = btn.getAttribute("data-key");
-          if (!key) return;
-          this.switchCategoryFromMenu(key);
-        });
-      });
+      this.nodes.topicMenu.hidden = true;
+      this.topicMenuOpen = false;
+      this.nodes.topicSelect.setAttribute("aria-expanded", "false");
+      this.nodes.topicMenu.innerHTML = "";
     }
 
     toggleTopicMenu(){
-      if (this.isSending) return; // 🔒 amíg válaszol, nincs topic váltás
-      if (!this.selectedCategory) return;
-      this.topicMenuOpen ? this.closeTopicMenu() : this.openTopicMenu();
+      return;
     }
 
     openTopicMenu(){
-      if (!this.selectedCategory) return;
-      this.topicMenuOpen = true;
-      this.nodes.topicMenu.hidden = false;
-      this.nodes.topicSelect.setAttribute("aria-expanded", "true");
+      return;
     }
 
     closeTopicMenu(){
@@ -995,59 +927,12 @@
     }
 
     switchCategoryFromMenu(key){
-      if (this.isSending) {
-      this.addBot("Egy pillanat 😊 Előbb befejezem a választ, aztán tudsz témát váltani.");
-      this.closeTopicMenu();
       return;
-      }
-      if (!key || key === this.selectedCategory) {
-        this.closeTopicMenu();
-        return;
-      }
-
-      const label = this.getCategoryLabel(key);
-      this.selectedCategory = key;
-      safeWrite(CONFIG.categoryKey, key);
-      this.closeTopicMenu();
-
-      console.log(`[Luna] Topic switched -> ${label} (${key})`);
-
-      // felhasználóbarát visszajelzés
-      this.addBot(`Téma váltva: ${label}`);
-      this.addBot(TEXT.askAfterPick);
-
-      this.setInputEnabled(true);
-      this.nodes.input.focus();
     }
 
     // ===== Category cards (kezdeti választás) =====
     showCategoryOptions(){
-      if (this.categoryRowEl) return;
-
-      const row = document.createElement('div');
-      row.className = 'row bot options';
-
-      CATEGORIES.forEach(cat => {
-        const card = document.createElement('div');
-        card.className = 'catCard';
-        card.innerHTML = `
-          <div class="catLeft">
-            <div class="catTitle">${cat.label}</div>
-            <div class="catSub">${cat.sub || ""}</div>
-          </div>
-          <div class="arrow" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M10 7l5 5-5 5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-        `;
-        card.addEventListener('click', () => this.handleCategoryPick(cat));
-        row.appendChild(card);
-      });
-
-      this.nodes.msgs.appendChild(row);
-      this.categoryRowEl = row;
-      this.scrollToEnd();
+      return;
     }
 
     hideCategoryOptions(){
@@ -1058,18 +943,7 @@
     }
 
     handleCategoryPick(cat){
-      this.hideCategoryOptions();
-
-      this.selectedCategory = cat.key;
-      safeWrite(CONFIG.categoryKey, cat.key);
-
-      console.log(`[Luna] Topic selected -> ${cat.label} (${cat.key})`);
-
-      this.addUser(cat.label);
-      this.addBot(TEXT.askAfterPick, {persist:true});
-
-      this.setInputEnabled(true);
-      this.nodes.input.focus();
+      return;
     }
 
     renderHistory(){
@@ -1086,11 +960,8 @@
       this.hideCategoryOptions();
       this.nodes.msgs.innerHTML = '';
 
-      // category-t töröljük, újra válasszon
-      this.startCategoryGate();
-
       this.addBot(TEXT.greet, {persist:false});
-      this.showCategoryOptions();
+      this.setInputEnabled(true);
       this.scrollToEnd();
     }
 
@@ -1101,13 +972,13 @@
 
       if (st.blockedUntil && now < st.blockedUntil) {
         const leftSec = msToSecCeil(st.blockedUntil - now);
-        this.setInputEnabled(!!this.selectedCategory);
+        this.setInputEnabled(true);
 
         if (!isStartup) this.addBot(TEXT.spamBlocked(leftSec), {persist:true});
 
         clearTimeout(this.blockTimer);
         this.blockTimer = setTimeout(() => {
-          this.setInputEnabled(!!this.selectedCategory);
+          this.setInputEnabled(true);
         }, (st.blockedUntil - now) + 30);
 
         return true;
@@ -1136,7 +1007,7 @@
           const st2 = readSpamState();
           st2.blockedUntil = 0;
           writeSpamState(st2);
-          this.setInputEnabled(!!this.selectedCategory);
+          this.setInputEnabled(true);
         }, SPAM.blockMs + 30);
 
         return false;
@@ -1148,12 +1019,6 @@
 
     // ===== Send =====
     async handleSend(){
-      if (!this.selectedCategory) {
-        this.addBot(TEXT.greet, {persist:false});
-        this.showCategoryOptions();
-        return;
-      }
-
       const question = (this.nodes.input.value || '').trim();
       if(!question) return;
 
@@ -1169,18 +1034,8 @@
         return;
       }
 
-      const likely = detectLikelyCategory(question);
-      if (likely && likely !== this.selectedCategory) {
-        const suggestedLabel = this.getCategoryLabel(likely);
-        this.addUser(question);
-        this.addBot(TEXT.mismatch(suggestedLabel));
-        return;
-      }
-
-      const label = this.getCategoryLabel(this.selectedCategory) || this.selectedCategory;
-
       // ✅ BÖNGÉSZŐ KONZOL LOG (kérdés)
-      console.log(`[Luna] Q (${label}) ->`, question);
+      console.log(`[Luna] Q ->`, question);
 
       this.addUser(question);
 
@@ -1223,7 +1078,7 @@
           console.log(`[Luna] A (error) ->`, TEXT.networkError);
         }
       } finally {
-        this.setInputEnabled(!!this.selectedCategory);
+        this.setInputEnabled(true);
         this.scrollToEnd();
       }
     }
