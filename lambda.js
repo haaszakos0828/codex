@@ -14,6 +14,7 @@ console.log("[boot] streamifyResponse available =", !!globalThis.awslambda?.stre
 const REGION = process.env.AWS_REGION || process.env.REGION || "eu-central-1";
 const SECRET_ID = process.env.OPENAI_SECRET_ID || "solarchat/openai";
 const MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
+const EMBED_MODEL = process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small";
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://solarchat.eu";
 
@@ -24,6 +25,9 @@ const MENU_S3_KEY = process.env.MENU_S3_KEY || "";
 
 // limits / tuning (server.js parity)
 const MAX_MENU_CHUNK = 15000;
+const MAX_EMBED_CHUNK_CHARS = 1400;
+const RETRIEVAL_TOP_K_DEFAULT = 4;
+const RETRIEVAL_TOP_K_BROAD = 7;
 const HISTORY_MAX = 16;
 const HISTORY_TRIM_LEN = 500;
 const USER_TRIM_LEN = 1000;
@@ -46,6 +50,9 @@ const HttpResponseStream = awslambda?.HttpResponseStream;
 // ============ CACHES (persist across warm invocations) ============
 let _cachedApiKey;
 let _cachedMenuText;
+let _cachedMenuChunks;
+let _cachedMenuEmbeddings;
+let _cachedIntentEmbeddings;
 
 const cache = new Map();     // cacheKey -> { ts, reply }
 const spamState = new Map(); // clientKey -> { windowStart, count, blockedUntil, lastAt }
@@ -53,7 +60,7 @@ const rateState = new Map(); // clientKey -> { windowStart, count, resetAt }
 const inFlight = new Map();  // clientKey -> true
 
 // categories must match frontend keys (server.js used these)
-const VALID_CATEGORIES = new Set(["full", "starters_soups", "mains", "desserts", "drinks", "info"]);
+const VALID_CATEGORIES = new Set(["auto", "full", "starters_soups", "mains", "desserts", "drinks", "info"]);
 
 const PRICING_PER_1M = {
   "gpt-5-nano": { input: 0.05, cached_input: 0.005, output: 0.40 },
@@ -258,40 +265,198 @@ function getMenuChunkFromText(restaurantInfo, category) {
 }
 
 function normalizeCategory(category) {
-  return VALID_CATEGORIES.has(category) ? category : "full";
+  return VALID_CATEGORIES.has(category) ? category : "auto";
 }
 
-function buildMessages({ message, history, category, restaurantInfo }) {
-  const safeCategory = normalizeCategory(category);
+function splitSections(restaurantInfo) {
+  const t = String(restaurantInfo || "");
+  const RX_MEZE = /MEZE\s*\/\s*MEZZE/i;
+  const RX_SOUPS = /LEVESEK\s*\/\s*SOUPS/i;
+  const RX_OVEN = /PÉKÜNK KEMENCÉJÉBŐL/i;
+  const RX_CHAR = /FASZÉNEN SÜLTEK\s*\/\s*CHAR GRILLED/i;
+  const RX_CLASSICS = /KLASSZIKUSOK\s*\/\s*CLASSICS/i;
+  const RX_SEA = /TENGER FINOMSÁGAI/i;
+  const RX_SALADS = /SALÁTÁK\s*\/\s*SALADS/i;
+  const RX_SIDES = /KÖRETEK\s*\/\s*SIDES/i;
+  const RX_DESSERTS = /DESSZERTEK\s*\/\s*DESSERTS/i;
+  const RX_DRINKS = /ITALOK\s*\/\s*DRINKS/i;
+  const RX_FOOTER = /Az árak forintban értendőek/i;
 
+  const markers = [
+    { key: "meze", rx: RX_MEZE },
+    { key: "soups", rx: RX_SOUPS },
+    { key: "oven", rx: RX_OVEN },
+    { key: "char", rx: RX_CHAR },
+    { key: "classics", rx: RX_CLASSICS },
+    { key: "sea", rx: RX_SEA },
+    { key: "salads", rx: RX_SALADS },
+    { key: "sides", rx: RX_SIDES },
+    { key: "desserts", rx: RX_DESSERTS },
+    { key: "drinks", rx: RX_DRINKS },
+  ];
+
+  const positions = markers
+    .map((m) => ({ ...m, pos: indexOfRegex(t, m.rx) }))
+    .filter((m) => m.pos >= 0)
+    .sort((a, b) => a.pos - b.pos);
+
+  const sections = [];
+
+  if (positions.length) {
+    const introEnd = positions[0].pos;
+    if (introEnd > 0) sections.push({ key: "intro", text: t.slice(0, introEnd).trim() });
+  } else if (t.trim()) {
+    sections.push({ key: "intro", text: t.trim().slice(0, MAX_MENU_CHUNK) });
+  }
+
+  for (let i = 0; i < positions.length; i++) {
+    const start = positions[i].pos;
+    const end = i + 1 < positions.length ? positions[i + 1].pos : t.length;
+    const text = t.slice(start, end).trim();
+    if (text) sections.push({ key: positions[i].key, text });
+  }
+
+  const footerPos = indexOfRegex(t, RX_FOOTER);
+  if (footerPos >= 0) {
+    const footer = t.slice(footerPos).trim();
+    if (footer) sections.push({ key: "footer", text: footer });
+  }
+
+  return sections.filter((s) => s.text);
+}
+
+function chunkSection(key, text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const chunks = [];
+  let buf = "";
+
+  for (const line of lines) {
+    const next = buf ? `${buf}\n${line}` : line;
+    if (next.length > MAX_EMBED_CHUNK_CHARS && buf) {
+      chunks.push(buf.trim());
+      buf = line;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf.trim()) chunks.push(buf.trim());
+
+  return chunks.map((chunk, i) => ({
+    id: `${key}:${i + 1}`,
+    key,
+    text: chunk,
+  }));
+}
+
+function chunkMenuForEmbedding(restaurantInfo) {
+  const sections = splitSections(restaurantInfo);
+  const chunks = [];
+  for (const section of sections) {
+    for (const chunk of chunkSection(section.key, section.text)) {
+      chunks.push(chunk);
+    }
+  }
+  return chunks;
+}
+
+function cosineSimilarity(a, b) {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
+}
+
+async function getMenuEmbeddings(client, restaurantInfo) {
+  if (_cachedMenuChunks && _cachedMenuEmbeddings) {
+    return { chunks: _cachedMenuChunks, embeddings: _cachedMenuEmbeddings };
+  }
+
+  const chunks = chunkMenuForEmbedding(restaurantInfo);
+  const embeddings = [];
+
+  for (const chunk of chunks) {
+    const resp = await client.embeddings.create({
+      model: EMBED_MODEL,
+      input: chunk.text.slice(0, MAX_EMBED_CHUNK_CHARS),
+    });
+    embeddings.push(resp.data[0].embedding);
+  }
+
+  _cachedMenuChunks = chunks;
+  _cachedMenuEmbeddings = embeddings;
+
+  return { chunks, embeddings };
+}
+
+async function getIntentEmbeddings(client) {
+  if (_cachedIntentEmbeddings) return _cachedIntentEmbeddings;
+
+  const intents = [
+    { key: "recommendation", text: "User asks for recommendations or what to try today." },
+    { key: "cheapest", text: "User asks for the cheapest or lowest priced option." },
+    { key: "comparison", text: "User asks to compare items, prices, or differences." },
+    { key: "general", text: "User asks general restaurant info or menu info." },
+  ];
+
+  const embeddings = [];
+  for (const intent of intents) {
+    const resp = await client.embeddings.create({
+      model: EMBED_MODEL,
+      input: intent.text,
+    });
+    embeddings.push(resp.data[0].embedding);
+  }
+
+  _cachedIntentEmbeddings = { intents, embeddings };
+  return _cachedIntentEmbeddings;
+}
+
+async function detectIntent(client, queryEmbedding) {
+  const { intents, embeddings } = await getIntentEmbeddings(client);
+  let best = { key: "general", score: -1 };
+
+  for (let i = 0; i < intents.length; i++) {
+    const score = cosineSimilarity(queryEmbedding, embeddings[i]);
+    if (score > best.score) best = { key: intents[i].key, score };
+  }
+
+  return best;
+}
+
+function buildMessages({ message, history, menuContext, intent }) {
   const systemPrompt = `
 You are a friendly, professional AI assistant for the TÜRKIZ restaurant website.
 
-CURRENT TOPIC
-- The user selected this topic: ${safeCategory}
-- Answer ONLY questions that belong to this selected topic.
-- If the user asks about another topic, politely ask them to switch topic in the UI.
+SCOPE & ACCURACY
+- Answer questions only using the provided restaurant/menu context.
+- If the context does NOT contain the answer, say so clearly and briefly.
+- NEVER invent dishes, prices, policies, or details.
 
 LANGUAGE & STYLE
 - Respond politely and naturally in the customer's language.
 - Keep it short: 1–2 short sentences OR up to 3 simple bullet points.
-- Avoid hallucinations: NEVER invent dishes, prices, policies, or details.
 
 RECOMMENDATIONS
-- Recommend food/drinks only when asked what to eat/drink.
-- Suggest 2–3 items from the context, briefly.
+- If the user asks for a recommendation but provides no preferences, ask 1–2 short clarifying questions first.
+- If preferences are provided, suggest 2–3 items from the context only.
+
+COMPARISONS & CHEAPEST
+- For comparisons or "cheapest" requests, use prices from the context only.
+- If you cannot compare due to missing items or prices, say that clearly and ask a clarifying question.
+
+INTENT (internal): ${intent || "general"}
 `.trim();
 
-  const menuChunk =
-    safeCategory === "full"
-      ? String(restaurantInfo || "").slice(0, MAX_MENU_CHUNK)
-      : getMenuChunkFromText(restaurantInfo, safeCategory);
-
-  const menuContext = `
-RESTAURANT / MENU CONTEXT (topic: ${safeCategory})
+  const menuContextBlock = `
+RESTAURANT / MENU CONTEXT
 Use this text as the ONLY source of truth:
 
-${menuChunk}
+${menuContext}
 `.trim();
 
   const safeHist = Array.isArray(history)
@@ -303,7 +468,7 @@ ${menuChunk}
 
   return [
     { role: "system", content: systemPrompt },
-    { role: "system", content: menuContext },
+    { role: "system", content: menuContextBlock },
     ...safeHist,
     { role: "user", content: String(message || "").slice(0, USER_TRIM_LEN) },
   ];
@@ -314,6 +479,42 @@ function makeCacheKey(message, history, category) {
   const h = Array.isArray(history) ? history.slice(-4) : [];
   const hKey = h.map((x) => `${x?.role || ""}:${String(x?.content || "").slice(0, 140)}`).join("|");
   return `${safeCategory}::${String(message || "").slice(0, 600)}::${hKey}`;
+}
+
+async function buildMenuContextForQuery({ client, restaurantInfo, message }) {
+  const { chunks, embeddings } = await getMenuEmbeddings(client, restaurantInfo);
+  const queryResp = await client.embeddings.create({
+    model: EMBED_MODEL,
+    input: String(message || "").slice(0, USER_TRIM_LEN),
+  });
+  const queryEmbedding = queryResp.data[0].embedding;
+  const intent = await detectIntent(client, queryEmbedding);
+
+  const scored = embeddings.map((vec, i) => ({
+    idx: i,
+    score: cosineSimilarity(queryEmbedding, vec),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+
+  const topK = intent.key === "cheapest" || intent.key === "comparison"
+    ? RETRIEVAL_TOP_K_BROAD
+    : RETRIEVAL_TOP_K_DEFAULT;
+
+  const selected = scored.slice(0, topK).map((s) => chunks[s.idx]);
+  const intro = chunks.filter((c) => c.key === "intro").slice(0, 1);
+  const footer = chunks.filter((c) => c.key === "footer").slice(0, 1);
+
+  const unique = new Map();
+  [...intro, ...footer, ...selected].forEach((chunk) => {
+    if (!unique.has(chunk.id)) unique.set(chunk.id, chunk);
+  });
+
+  const menuContext = Array.from(unique.values())
+    .map((chunk) => `### ${chunk.key.toUpperCase()} (${chunk.id})\n${chunk.text}`)
+    .join("\n\n")
+    .slice(0, MAX_MENU_CHUNK);
+
+  return { menuContext, intent: intent.key };
 }
 
 function cleanupCache() {
@@ -413,17 +614,22 @@ async function handleHealth() {
 async function computeReply({ message, history, category }) {
   cleanupCache();
 
-  const restaurantInfo = await getMenuText();
-  const messages = buildMessages({ message, history, category, restaurantInfo });
-
   const cacheKey = makeCacheKey(message, history, category);
   const cached = cache.get(cacheKey);
   if (cached && msNow() - cached.ts < CACHE_TTL) {
     return { reply: cached.reply, cached: true };
   }
 
+  const restaurantInfo = await getMenuText();
   const apiKey = await getOpenAIApiKey();
   const client = new OpenAI({ apiKey });
+  const retrieval = await buildMenuContextForQuery({ client, restaurantInfo, message });
+  const messages = buildMessages({
+    message,
+    history,
+    menuContext: retrieval.menuContext,
+    intent: retrieval.intent,
+  });
 
   const resp = await client.chat.completions.create({
     model: MODEL,
@@ -482,9 +688,6 @@ async function handleChatStream(event, responseStream) {
   try {
     cleanupCache();
 
-    const restaurantInfo = await getMenuText();
-    const messages = buildMessages({ message, history, category, restaurantInfo });
-
     const cacheKey = makeCacheKey(message, history, category);
     const cached = cache.get(cacheKey);
 
@@ -507,8 +710,16 @@ async function handleChatStream(event, responseStream) {
       return;
     }
 
+    const restaurantInfo = await getMenuText();
     const apiKey = await getOpenAIApiKey();
     const client = new OpenAI({ apiKey });
+    const retrieval = await buildMenuContextForQuery({ client, restaurantInfo, message });
+    const messages = buildMessages({
+      message,
+      history,
+      menuContext: retrieval.menuContext,
+      intent: retrieval.intent,
+    });
 
     const stream = await client.chat.completions.create({
       model: MODEL,
